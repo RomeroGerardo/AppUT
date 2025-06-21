@@ -7,6 +7,10 @@ import { MapPin, Briefcase, Wrench, Scissors, Leaf } from "lucide-react"
 import { VoiceSearch } from "@/components/voice-search"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { supabase } from '../lib/supabaseClient';
+import { useEffect, useState } from 'react';
+import { useAuth } from "@/hooks/useAuth"
+import { FaWhatsapp } from "react-icons/fa"
 
 // Datos de ejemplo
 const featuredServices = [
@@ -23,89 +27,101 @@ const categories = [
   { id: "estetica", name: "Estética", icon: <Scissors className="h-6 w-6" /> },
 ]
 
+type Servicio = {
+  id: string
+  nombre: string
+  descripcion: string
+  precio?: number
+  proveedor_id?: string
+  categoria?: string
+  imagen?: string
+  whatsapp?: string
+}
+
+const IMAGEN_DEFAULT = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80"
+
 export default function Home() {
   const router = useRouter()
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth()
+  const [servicios, setServicios] = useState<Servicio[]>([])
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const { data, error } = await supabase.from('usuarios').select('*');
+      if (!error) setUsers(data || []);
+      setLoading(false);
+    };
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    const fetchServicios = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("servicios")
+          .select("*")
+          .order('created_at', { ascending: false })
+        
+        if (error) {
+          console.error('Error al cargar servicios:', error)
+          return
+        }
+        
+        if (data) {
+          setServicios(data)
+        }
+      } catch (err) {
+        console.error('Error inesperado:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchServicios()
+  }, [])
 
   const handleSearch = (query: string) => {
     router.push(`/buscar?q=${encodeURIComponent(query)}`)
   }
 
   return (
-    <main>
-      <MobileNav />
+    <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded shadow">
+      <h1 className="text-3xl font-bold mb-4">
+        ¡Bienvenido{user ? `, ${user.nombre}` : ""} a Universo Trabajo!
+      </h1>
+      <p className="text-lg mb-8">
+        Explora, edita tu perfil, agrega servicios y encuentra lo que necesitas.
+      </p>
 
-      <div className="container px-4 py-6 max-w-5xl mx-auto">
-        <section className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Bienvenido a Universo Trabajo</h1>
-          <p className="text-muted-foreground">Encuentra los mejores profesionales cerca de ti</p>
-
-          <div className="mt-6 flex gap-2">
-            <VoiceSearch className="flex-1" onSearch={handleSearch} />
-            <Button variant="outline" size="icon">
-              <MapPin className="h-4 w-4" />
-            </Button>
-            <Button>Buscar</Button>
-          </div>
-
-          <div className="mt-4 flex flex-col sm:flex-row gap-2 items-center justify-center">
-            <p className="text-sm text-muted-foreground">¿Eres un profesional y quieres ofrecer tus servicios?</p>
-            <Button variant="outline" asChild>
-              <Link href="/registro">Regístrate como proveedor</Link>
-            </Button>
-          </div>
-        </section>
-
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Categorías</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {categories.map((category) => (
-              <Button key={category.id} variant="outline" className="h-auto py-6 flex flex-col gap-2" asChild>
-                <a href={`/buscar?categoria=${category.id}`}>
-                  <div className="p-2 rounded-full bg-primary/10">{category.icon}</div>
-                  <span>{category.name}</span>
-                </a>
-              </Button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Servicios destacados</h2>
-            <Button variant="link" asChild>
-              <a href="/buscar">Ver todos</a>
-            </Button>
-          </div>
-
-          <Tabs defaultValue="cercanos">
-            <TabsList className="mb-4">
-              <TabsTrigger value="cercanos">Cercanos</TabsTrigger>
-              <TabsTrigger value="populares">Populares</TabsTrigger>
-              <TabsTrigger value="recientes">Recientes</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="cercanos" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {featuredServices.map((service) => (
-                <ServiceCard key={service.id} {...service} />
-              ))}
-            </TabsContent>
-
-            <TabsContent value="populares" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {[...featuredServices]
-                .sort((a, b) => b.rating - a.rating)
-                .map((service) => (
-                  <ServiceCard key={service.id} {...service} />
-                ))}
-            </TabsContent>
-
-            <TabsContent value="recientes" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {[...featuredServices].reverse().map((service) => (
-                <ServiceCard key={service.id} {...service} />
-              ))}
-            </TabsContent>
-          </Tabs>
-        </section>
-      </div>
-    </main>
+      <h2 className="text-2xl font-semibold mb-4">Servicios destacados</h2>
+      {loading ? (
+        <div className="flex justify-center items-center py-8">
+          <p className="text-gray-500">Cargando servicios...</p>
+        </div>
+      ) : servicios.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-gray-500 mb-4">No hay servicios disponibles en este momento.</p>
+          {!user && (
+            <p className="text-sm text-gray-400">
+              Inicia sesión para ver más servicios o crear uno nuevo.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          {servicios.map((servicio) => (
+            <Link key={servicio.id} href={`/servicios/${servicio.id}`} className="border rounded p-4 shadow hover:shadow-lg transition flex flex-col cursor-pointer bg-white hover:bg-gray-50">
+              <img src={servicio.imagen || IMAGEN_DEFAULT} alt={servicio.nombre} className="w-full h-32 object-cover rounded mb-2" />
+              <h3 className="font-bold text-lg mb-2">{servicio.nombre}</h3>
+              <p className="mb-2 text-gray-700">{servicio.descripcion}</p>
+              {servicio.precio && (
+                <p className="text-indigo-600 font-semibold mb-1">Precio: ${servicio.precio}</p>
+              )}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
